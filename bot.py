@@ -1,6 +1,4 @@
 import os
-import uuid
-import random
 import yt_dlp
 
 from telegram import Update
@@ -14,16 +12,13 @@ from telegram.ext import (
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/122.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/123.0 Safari/537.36",
-]
+if not BOT_TOKEN:
+    raise Exception("BOT_TOKEN not found!")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎬 Send YouTube video link."
+        "🎬 Send YouTube video link"
     )
 
 
@@ -40,61 +35,29 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not os.path.exists("downloads"):
             os.makedirs("downloads")
 
-        unique_id = str(uuid.uuid4())
-
-        output_template = f"downloads/{unique_id}.%(ext)s"
-
         ydl_opts = {
-            "format": "bv*+ba/b",
-            "merge_output_format": "mp4",
-            "outtmpl": output_template,
-            "cookiefile": "cookies.txt",
+            "format": "mp4",
+            "outtmpl": "downloads/%(title)s.%(ext)s",
             "quiet": True,
             "noplaylist": True,
-
-            "http_headers": {
-                "User-Agent": random.choice(USER_AGENTS),
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "web"]
-                }
-            },
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 
             info = ydl.extract_info(url, download=True)
 
-            downloaded_file = None
-
-            for file in os.listdir("downloads"):
-
-                if file.startswith(unique_id):
-
-                    downloaded_file = os.path.join(
-                        "downloads",
-                        file
-                    )
-
-                    break
-
-            if not downloaded_file:
-                raise Exception("Download failed.")
+            file_path = ydl.prepare_filename(info)
 
         await msg.edit_text("📤 Uploading...")
 
-        with open(downloaded_file, "rb") as video:
+        with open(file_path, "rb") as video:
 
             await update.message.reply_video(
                 video=video,
                 supports_streaming=True
             )
 
-        # Cleanup
-        os.remove(downloaded_file)
+        os.remove(file_path)
 
         await msg.edit_text("✅ Done!")
 
@@ -118,10 +81,16 @@ def main():
         )
     )
 
-    print("Bot running on Render...")
+    print("Bot running...")
 
     app.run_polling()
 
 
 if __name__ == "__main__":
-    main()
+
+    try:
+        main()
+
+    except Exception as e:
+        print("CRASH ERROR:")
+        print(e)
