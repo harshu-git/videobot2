@@ -2,179 +2,66 @@ import os
 import yt_dlp
 from telegram import Update
 from telegram.ext import (
-ApplicationBuilder,
-CommandHandler,
-MessageHandler,
-ContextTypes,
-filters,
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
 )
-
-# ─────────────────────────────────────────────
-
-# BOT TOKEN
-
-# ─────────────────────────────────────────────
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# ─────────────────────────────────────────────
 
-# START MESSAGE
-
-# ─────────────────────────────────────────────
-
-WELCOME_MESSAGE = (
-"👋 Welcome to Harsh's Downloader Bot 🚀\n\n"
-"📥 Send any YouTube link\n"
-"🎬 I'll download the video instantly\n\n"
-"⚡ Fast • Simple • HD Quality\n\n"
-"👨‍💻 Created by Harsh Shrimalii\n"
-"📷 https://instagram.com/framesbyharshhh"
-)
-
-# ─────────────────────────────────────────────
-
-# START COMMAND
-
-# ─────────────────────────────────────────────
-
+# Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-```
-await update.message.reply_text(
-    WELCOME_MESSAGE
-)
-```
-
-# ─────────────────────────────────────────────
-
-# DOWNLOAD FUNCTION
-
-# ─────────────────────────────────────────────
-
-def download_video(url):
-
-```
-os.makedirs("downloads", exist_ok=True)
-
-output_template = "downloads/%(title)s.%(ext)s"
-
-ydl_opts = {
-    "format": "best[ext=mp4]",
-    "outtmpl": output_template,
-    "quiet": True,
-    "noplaylist": True,
-}
-
-with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-
-    info = ydl.extract_info(url, download=True)
-
-    return ydl.prepare_filename(info)
-```
-
-# ─────────────────────────────────────────────
-
-# HANDLE USER MESSAGE
-
-# ─────────────────────────────────────────────
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-```
-url = update.message.text.strip()
-
-if "youtube.com" not in url and "youtu.be" not in url:
-
     await update.message.reply_text(
-        "❌ Please send a valid YouTube link"
+        "👋 Send me a YouTube video link and I will download it."
     )
 
-    return
 
-msg = await update.message.reply_text(
-    "⏳ Downloading video..."
-)
+# Download function
+async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = update.message.text
 
-try:
+    msg = await update.message.reply_text("📥 Downloading video...")
 
-    file_path = download_video(url)
+    try:
+        ydl_opts = {
+            "format": "best[ext=mp4]",
+            "outtmpl": "video.%(ext)s",
+            "quiet": True,
+        }
 
-    if not os.path.exists(file_path):
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            file_name = ydl.prepare_filename(info)
 
-        await msg.edit_text(
-            "❌ Download failed"
-        )
+        await msg.edit_text("📤 Uploading video...")
 
-        return
+        with open(file_name, "rb") as video:
+            await update.message.reply_video(video=video)
 
-    size_mb = os.path.getsize(file_path) / (1024 * 1024)
+        os.remove(file_name)
 
-    if size_mb > 49:
+        await msg.edit_text("✅ Done!")
 
-        await msg.edit_text(
-            "⚠️ File too large for Telegram"
-        )
+    except Exception as e:
+        await msg.edit_text(f"❌ Error:\n{str(e)}")
 
-        os.remove(file_path)
 
-        return
-
-    await msg.edit_text(
-        "📤 Uploading video..."
-    )
-
-    with open(file_path, "rb") as video_file:
-
-        await update.message.reply_video(
-            video=video_file,
-            caption="✅ Download Complete!",
-            supports_streaming=True,
-        )
-
-    os.remove(file_path)
-
-    await msg.delete()
-
-except Exception as e:
-
-    await msg.edit_text(
-        f"❌ Error:\n{str(e)}"
-    )
-```
-
-# ─────────────────────────────────────────────
-
-# MAIN FUNCTION
-
-# ─────────────────────────────────────────────
-
+# Main
 def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-```
-app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
 
-app.add_handler(
-    CommandHandler("start", start)
-)
-
-app.add_handler(
-    MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        handle_message
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, download_video)
     )
-)
 
-print("🤖 Bot is running...")
+    print("Bot is running...")
+    app.run_polling()
 
-app.run_polling()
-```
 
-# ─────────────────────────────────────────────
-
-# RUN BOT
-
-# ─────────────────────────────────────────────
-
-if **name** == "**main**":
-main()
+if __name__ == "__main__":
+    main()
