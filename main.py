@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 import requests
-import yt_dlp
+import re
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
@@ -19,19 +19,11 @@ if not BOT_TOKEN:
 
 BOT_TOKEN = BOT_TOKEN.strip().replace('"', '').replace("'", "")
 
-# Function to fetch a live PO Token dynamically from an open-source solver API
-def fetch_live_po_token():
-    try:
-        response = requests.get("https://yt-dlp.dev", timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            po_token = data.get("po_token")
-            visitor_data = data.get("visitor_data")
-            logger.info("✅ Successfully fetched fresh live PO Token from remote solver engine.")
-            return po_token, visitor_data
-    except Exception as e:
-        logger.error(f"⚠️ Dynamic token engine unreachable: {str(e)}. Using fallback client signatures.")
-    return None, None
+# Extract cleaner YouTube Video ID from any regular or Shorts URL
+def extract_video_id(url):
+    pattern = r'(?:v=|\/shorts\/|\/embed\/|\/v\/|youtu\.be\/|\/v=|^)([^#\&\?^\/]{11})'
+    match = re.search(pattern, url)
+    return match.group(1) if match else None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Send me any social media video link, and I will download it!")
@@ -43,43 +35,77 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     logger.info(f"Processing URL: {url}")
-    msg = await update.message.reply_text("📥 Processing video... Please wait.")
+    msg = await update.message.reply_text("📥 Fetching stream links... Please wait.")
 
+    # -------------------------------------------------------------
+    # ROUTE A: HIGH-SPEED BYPASS FOR YOUTUBE & YOUTUBE SHORTS
+    # -------------------------------------------------------------
+    if "youtube.com" in url or "youtu.be" in url:
+        video_id = extract_video_id(url)
+        if not video_id:
+            await msg.edit_text("❌ Could not extract a valid YouTube Video ID.")
+            return
+
+        try:
+            # Connect to a rapid open-source third-party media infrastructure pipeline
+            api_url = f"https://cobalt.tools"
+            payload = {
+                "url": f"https://youtube.com{video_id}",
+                "videoQuality": "720",
+                "downloadMode": "video"
+            }
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.post(api_url, json=payload, headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                result = response.json()
+                download_url = result.get("url")
+                
+                if download_url:
+                    await msg.edit_text("🚀 Downloading media file stream payload...")
+                    
+                    # Stream the remote data chunk instantly straight into memory
+                    video_data = requests.get(download_url, stream=True, timeout=30)
+                    
+                    await context.bot.send_video(
+                        chat_id=update.effective_chat.id,
+                        video=video_data.content,
+                        filename=f"{video_id}.mp4",
+                        caption="Here is your video! 🎬"
+                    )
+                    await msg.delete()
+                    logger.info("YouTube video delivered successfully via offloaded API pipeline.")
+                    return
+            
+            raise Exception("API gateway did not return a valid download URL path.")
+
+        except Exception as api_err:
+            logger.error(f"Route A Bypass failed: {str(api_err)}. Swapping to standard extraction profile...")
+            # If the remote API gateway encounters traffic limits, the code automatically falls back to Route B below
+
+    # -------------------------------------------------------------
+    # ROUTE B: UNIVERSAL EXTRACTOR FOR INSTAGRAM, TIKTOK, TWITTER
+    # -------------------------------------------------------------
+    import yt_dlp
     filename = None
-    
-    # Universal fallback array for YouTube formats (Resolves YouTube Shorts compatibility)
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',  # Flexible format matching engine
+        'format': 'bestvideo+bestaudio/best',
         'outtmpl': '%(id)s.%(ext)s',
         'merge_output_format': 'mp4',
         'noplaylist': True,
         'quiet': True,
+        'extractor_args': {'youtube': {'player_client': ['mweb', 'tv_embedded']}}
     }
-
-    # Fetch live signature token before downloading
-    po_token, visitor_data = fetch_live_po_token()
-    
-    if po_token and visitor_data:
-        ydl_opts['extractor_args'] = {
-            'youtube': {
-                'po_token': f'web+{po_token}',
-                'visitor_data': visitor_data,
-                'player_client': ['web', 'default']
-            }
-        }
-    else:
-        ydl_opts['extractor_args'] = {
-            'youtube': {
-                'player_client': ['mweb', 'tv_embedded']
-            }
-        }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
 
-        # Handle extensions like .mkv or others generated by dynamic format selection
         if filename and not os.path.exists(filename):
             base, _ = os.path.splitext(filename)
             for ext in ['mp4', 'mkv', 'webm']:
@@ -95,12 +121,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption="Here is your video! 🎬"
                 )
             await msg.delete()
-            logger.info("Video sent successfully.")
         else:
-            raise FileNotFoundError("Target download file generation sequence failed.")
+            raise FileNotFoundError("Target format file missing from workspace volume.")
 
     except Exception as e:
-        logger.error(f"Download processing failed: {str(e)}")
+        logger.error(f"Download processing failed completely: {str(e)}")
         await msg.edit_text(f"❌ Download failed.\n`{str(e)}`", parse_mode='Markdown')
     finally:
         if filename and os.path.exists(filename):
