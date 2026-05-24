@@ -1,4 +1,6 @@
 import os
+import uuid
+import random
 import yt_dlp
 
 from telegram import Update
@@ -12,61 +14,99 @@ from telegram.ext import (
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/122.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/123.0 Safari/537.36",
+]
 
-# START COMMAND
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎬 Send me a YouTube link and I will download it."
+        "🎬 Send YouTube video link."
     )
 
 
-# DOWNLOAD FUNCTION
 async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = update.message.text
 
-    status_message = await update.message.reply_text(
-        "📥 Downloading video..."
+    url = update.message.text.strip()
+
+    msg = await update.message.reply_text(
+        "📥 Downloading..."
     )
 
     try:
-        ydl_opts = {
-            "format": "best[ext=mp4]/best",
-            "outtmpl": "downloads/%(title)s.%(ext)s",
-            "cookiefile": "cookies.txt",
-            "quiet": True,
-            "noplaylist": True,
-        }
 
-        # Create downloads folder
         if not os.path.exists("downloads"):
             os.makedirs("downloads")
 
+        unique_id = str(uuid.uuid4())
+
+        output_template = f"downloads/{unique_id}.%(ext)s"
+
+        ydl_opts = {
+            "format": "bv*+ba/b",
+            "merge_output_format": "mp4",
+            "outtmpl": output_template,
+            "cookiefile": "cookies.txt",
+            "quiet": True,
+            "noplaylist": True,
+
+            "http_headers": {
+                "User-Agent": random.choice(USER_AGENTS),
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web"]
+                }
+            },
+        }
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+
             info = ydl.extract_info(url, download=True)
-            file_path = ydl.prepare_filename(info)
 
-        await status_message.edit_text("📤 Uploading video...")
+            downloaded_file = None
 
-        # Telegram upload
-        with open(file_path, "rb") as video:
+            for file in os.listdir("downloads"):
+
+                if file.startswith(unique_id):
+
+                    downloaded_file = os.path.join(
+                        "downloads",
+                        file
+                    )
+
+                    break
+
+            if not downloaded_file:
+                raise Exception("Download failed.")
+
+        await msg.edit_text("📤 Uploading...")
+
+        with open(downloaded_file, "rb") as video:
+
             await update.message.reply_video(
                 video=video,
                 supports_streaming=True
             )
 
-        # Delete downloaded file after upload
-        os.remove(file_path)
+        # Cleanup
+        os.remove(downloaded_file)
 
-        await status_message.edit_text("✅ Done!")
+        await msg.edit_text("✅ Done!")
 
     except Exception as e:
-        await status_message.edit_text(
+
+        await msg.edit_text(
             f"❌ Error:\n{str(e)}"
         )
 
 
-# MAIN
 def main():
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -78,7 +118,8 @@ def main():
         )
     )
 
-    print("Bot running...")
+    print("Bot running on Render...")
+
     app.run_polling()
 
 
