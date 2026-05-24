@@ -22,15 +22,17 @@ if not BOT_TOKEN:
 BOT_TOKEN = BOT_TOKEN.strip().replace('"', '').replace("'", "")
 COOKIE_FILE_PATH = "temp_youtube_cookies.txt"
 
-# General configuration options - Fixed format handling for YouTube Shorts/Videos
+# Universal format sorting string that prevents "format not available" crashes
 YTDL_OPTIONS = {
-    'format': 'best',
+    'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
     'outtmpl': '%(id)s.%(ext)s',
+    'merge_output_format': 'mp4',
     'noplaylist': True,
-    'quiet': True
+    'quiet': True,
+    'addheaders': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
 }
 
-# Securely rebuild cookie file from environment variable during runtime initialization
+# Rebuild cookie file from environment variable safely
 if RAW_COOKIES:
     try:
         with open(COOKIE_FILE_PATH, "w", encoding="utf-8") as f:
@@ -40,7 +42,7 @@ if RAW_COOKIES:
     except Exception as creation_error:
         logger.error(f"❌ Failed to parse secure cookie variable: {str(creation_error)}")
 else:
-    logger.warning("⚠️ Warning: No 'YOUTUBE_COOKIES_DATA' variable detected. Expecting 403 challenges on YouTube links.")
+    logger.warning("⚠️ Warning: No 'YOUTUBE_COOKIES_DATA' variable detected.")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Send me any social media video link, and I will download it!")
@@ -60,8 +62,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
 
-        if not os.path.exists(filename) and os.path.exists(f"{filename}.mp4"):
-            filename = f"{filename}.mp4"
+        # Catch instances where files are auto-renamed during container processing
+        if not os.path.exists(filename):
+            base, _ = os.path.splitext(filename)
+            if os.path.exists(f"{base}.mp4"):
+                filename = f"{base}.mp4"
 
         if os.path.exists(filename):
             with open(filename, 'rb') as video_file:
@@ -73,7 +78,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.delete()
             logger.info("Video sent successfully.")
         else:
-            raise FileNotFoundError("Downloaded file missing from workspace volume.")
+            raise FileNotFoundError("Downloaded file could not be located on disk.")
 
     except Exception as e:
         logger.error(f"Download processing failed: {str(e)}")
