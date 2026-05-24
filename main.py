@@ -5,28 +5,24 @@ import yt_dlp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
-# Detailed logging to pinpoint errors easily on Railway
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Fetch token safely from Railway environment variables
+# Fetch variables securely from Railway environment
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+RAW_COOKIES = os.getenv("YOUTUBE_COOKIES_DATA")
 
 if not BOT_TOKEN:
-    logger.critical("❌ DEPLOYMENT FAILED: The environment variable 'TELEGRAM_BOT_TOKEN' is missing in Railway!")
+    logger.critical("❌ DEPLOYMENT FAILED: Missing 'TELEGRAM_BOT_TOKEN' in Railway variables!")
     sys.exit(1)
 
-# Strip any accidental hidden spaces or quotes from the token string
 BOT_TOKEN = BOT_TOKEN.strip().replace('"', '').replace("'", "")
+COOKIE_FILE_PATH = "temp_youtube_cookies.txt"
 
-if ":" not in BOT_TOKEN:
-    logger.critical("❌ DEPLOYMENT FAILED: The value provided for 'TELEGRAM_BOT_TOKEN' does not look like a real Telegram token.")
-    sys.exit(1)
-
-# Optimizations for video parsing
+# General configuration options
 YTDL_OPTIONS = {
     'format': 'bestvideo+bestaudio/best',
     'outtmpl': '%(id)s.%(ext)s',
@@ -35,8 +31,19 @@ YTDL_OPTIONS = {
     'quiet': True
 }
 
+# Securely rebuild cookie file from environment variable during runtime initialization
+if RAW_COOKIES:
+    try:
+        with open(COOKIE_FILE_PATH, "w", encoding="utf-8") as f:
+            f.write(RAW_COOKIES.strip())
+        logger.info("🔒 Secure Verification: Generated dynamic cookie file from environment data.")
+        YTDL_OPTIONS['cookiefile'] = COOKIE_FILE_PATH
+    except Exception as creation_error:
+        logger.error(f"❌ Failed to parse secure cookie variable: {str(creation_error)}")
+else:
+    logger.warning("⚠️ Warning: No 'YOUTUBE_COOKIES_DATA' variable detected. Expecting 403 challenges on YouTube links.")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"User {update.effective_user.id} started the bot.")
     await update.message.reply_text("👋 Send me any social media video link, and I will download it!")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -54,7 +61,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
 
-        # Fallback handle if standard extension wrapper differs
         if not os.path.exists(filename) and os.path.exists(f"{filename}.mp4"):
             filename = f"{filename}.mp4"
 
@@ -68,7 +74,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.delete()
             logger.info("Video sent successfully.")
         else:
-            raise FileNotFoundError("Downloaded video file could not be located on the server disk.")
+            raise FileNotFoundError("Downloaded file missing from workspace volume.")
 
     except Exception as e:
         logger.error(f"Download processing failed: {str(e)}")
@@ -84,7 +90,7 @@ if __name__ == '__main__':
         application.add_handler(CommandHandler("start", start))
         application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
         
-        logger.info("✅ Connection established! Bot is now polling for messages.")
+        logger.info("✅ System Active. Polling Telegram network pipelines...")
         application.run_polling()
     except Exception as initialization_error:
         logger.critical(f"❌ Core engine crash during authorization setup: {str(initialization_error)}")
