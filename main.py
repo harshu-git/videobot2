@@ -11,14 +11,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Fetch standard token variable securely from Railway environment
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
 if not BOT_TOKEN:
     logger.critical("❌ DEPLOYMENT FAILED: Missing 'TELEGRAM_BOT_TOKEN' in Railway variables!")
     sys.exit(1)
 
 BOT_TOKEN = BOT_TOKEN.strip().replace('"', '').replace("'", "")
 
-# Setup standard options using TV app emulators to bypass cloud blocks
+# Configured to mimic official mobile app requests (bypasses datacenter blocks)
 YTDL_OPTIONS = {
     'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
     'outtmpl': '%(id)s.%(ext)s',
@@ -27,7 +29,7 @@ YTDL_OPTIONS = {
     'quiet': True,
     'extractor_args': {
         'youtube': {
-            'client': ['tv'], # Simulates a TV login to avoid server IP flags
+            'player_client': ['android', 'ios'], # Rotates mobile signatures to bypass cloud hosting restrictions
         }
     }
 }
@@ -50,6 +52,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
 
+        # Catch instances where files are auto-renamed during container processing
         if filename and not os.path.exists(filename):
             base, _ = os.path.splitext(filename)
             if os.path.exists(f"{base}.mp4"):
@@ -65,17 +68,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.delete()
             logger.info("Video sent successfully.")
         else:
-            raise FileNotFoundError("Video processing failed.")
+            raise FileNotFoundError("System failed to generate file output payload.")
 
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Download processing failed: {error_msg}")
-        
-        # Friendly instructions if a manual browser verification code is needed
-        if "To sign in, use this code" in error_msg or "authenticate" in error_msg:
-            await msg.edit_text("🔒 **First-time YouTube Verification Required:**\n\nPlease check the server application deployment logs on your Railway Dashboard to view your one-time link authorization code.")
-        else:
-            await msg.edit_text(f"❌ Download failed.\n`{error_msg}`", parse_mode='Markdown')
+        logger.error(f"Download processing failed: {str(e)}")
+        await msg.edit_text(f"❌ Download failed.\n`{str(e)}`", parse_mode='Markdown')
     finally:
         if filename and os.path.exists(filename):
             os.remove(filename)
