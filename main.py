@@ -12,6 +12,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Secure Token Configuration
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
     logger.critical("❌ DEPLOYMENT FAILED: Missing 'TELEGRAM_BOT_TOKEN' in Railway variables!")
@@ -19,125 +20,79 @@ if not BOT_TOKEN:
 
 BOT_TOKEN = BOT_TOKEN.strip().replace('"', '').replace("'", "")
 
-# Extract cleaner YouTube Video ID from any regular or Shorts URL
 def extract_video_id(url):
+    """Cleanly extracts the 11-character video ID string from any YouTube layout variation."""
     pattern = r'(?:v=|\/shorts\/|\/embed\/|\/v\/|youtu\.be\/|\/v=|^)([^#\&\?^\/]{11})'
     match = re.search(pattern, url)
     return match.group(1) if match else None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Send me any social media video link, and I will download it!")
+    await update.message.reply_text("🎬 **Welcome to the YouTube & Shorts Downloader!**\n\nSend me any YouTube video link or YouTube Shorts link, and I will deliver the file directly.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
-    if not url.startswith("http"):
-        await update.message.reply_text("❌ Please send a valid web link.")
+    
+    if not ("youtube.com" in url or "youtu.be" in url):
+        await update.message.reply_text("❌ This bot is optimized exclusively for YouTube & YouTube Shorts links.")
         return
 
-    logger.info(f"Processing URL: {url}")
-    msg = await update.message.reply_text("📥 Fetching stream links... Please wait.")
+    video_id = extract_video_id(url)
+    if not video_id:
+        await update.message.reply_text("❌ Invalid link format. Could not process the YouTube Video ID.")
+        return
 
-    # -------------------------------------------------------------
-    # ROUTE A: HIGH-SPEED BYPASS FOR YOUTUBE & YOUTUBE SHORTS
-    # -------------------------------------------------------------
-    if "youtube.com" in url or "youtu.be" in url:
-        video_id = extract_video_id(url)
-        if not video_id:
-            await msg.edit_text("❌ Could not extract a valid YouTube Video ID.")
-            return
-
-        try:
-            # Connect to a rapid open-source third-party media infrastructure pipeline
-            api_url = f"https://cobalt.tools"
-            payload = {
-                "url": f"https://youtube.com{video_id}",
-                "videoQuality": "720",
-                "downloadMode": "video"
-            }
-            headers = {
-                "Accept": "application/json",
-                "Content-Type": "application/json"
-            }
-            
-            response = requests.post(api_url, json=payload, headers=headers, timeout=15)
-            
-            if response.status_code == 200:
-                result = response.json()
-                download_url = result.get("url")
-                
-                if download_url:
-                    await msg.edit_text("🚀 Downloading media file stream payload...")
-                    
-                    # Stream the remote data chunk instantly straight into memory
-                    video_data = requests.get(download_url, stream=True, timeout=30)
-                    
-                    await context.bot.send_video(
-                        chat_id=update.effective_chat.id,
-                        video=video_data.content,
-                        filename=f"{video_id}.mp4",
-                        caption="Here is your video! 🎬"
-                    )
-                    await msg.delete()
-                    logger.info("YouTube video delivered successfully via offloaded API pipeline.")
-                    return
-            
-            raise Exception("API gateway did not return a valid download URL path.")
-
-        except Exception as api_err:
-            logger.error(f"Route A Bypass failed: {str(api_err)}. Swapping to standard extraction profile...")
-            # If the remote API gateway encounters traffic limits, the code automatically falls back to Route B below
-
-    # -------------------------------------------------------------
-    # ROUTE B: UNIVERSAL EXTRACTOR FOR INSTAGRAM, TIKTOK, TWITTER
-    # -------------------------------------------------------------
-    import yt_dlp
-    filename = None
-    ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',
-        'outtmpl': '%(id)s.%(ext)s',
-        'merge_output_format': 'mp4',
-        'noplaylist': True,
-        'quiet': True,
-        'extractor_args': {'youtube': {'player_client': ['mweb', 'tv_embedded']}}
-    }
+    logger.info(f"Processing Video Target ID: {video_id}")
+    msg = await update.message.reply_text("📥 Extracting stream pipelines... Please wait.")
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-
-        if filename and not os.path.exists(filename):
-            base, _ = os.path.splitext(filename)
-            for ext in ['mp4', 'mkv', 'webm']:
-                if os.path.exists(f"{base}.{ext}"):
-                    filename = f"{base}.{ext}"
-                    break
-
-        if filename and os.path.exists(filename):
-            with open(filename, 'rb') as video_file:
+        # Utilize a highly stable public endpoint cluster that processes bypass layouts automatically
+        api_url = "https://cobalt.tools"
+        payload = {
+            "url": f"https://youtube.com{video_id}",
+            "videoQuality": "720", # Optimized for clear playback within standard Telegram upload dimensions
+            "downloadMode": "video"
+        }
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        
+        # Triggering API payload query
+        response = requests.post(api_url, json=payload, headers=headers, timeout=20)
+        
+        if response.status_code == 200:
+            result = response.json()
+            download_url = result.get("url")
+            
+            if download_url:
+                await msg.edit_text("🚀 Streaming video file data directly to chat...")
+                
+                # Pull the raw media data binary buffer straight into the platform server instance memory
+                video_stream = requests.get(download_url, stream=True, timeout=30)
+                
                 await context.bot.send_video(
                     chat_id=update.effective_chat.id,
-                    video=video_file,
-                    caption="Here is your video! 🎬"
+                    video=video_stream.content,
+                    filename=f"{video_id}.mp4",
+                    caption="Here is your requested video! 🎬"
                 )
-            await msg.delete()
-        else:
-            raise FileNotFoundError("Target format file missing from workspace volume.")
+                await msg.delete()
+                logger.info("Video delivered successfully.")
+                return
+        
+        raise Exception("The parsing infrastructure is heavily overloaded right now. Please try again in a few moments.")
 
-    except Exception as e:
-        logger.error(f"Download processing failed completely: {str(e)}")
-        await msg.edit_text(f"❌ Download failed.\n`{str(e)}`", parse_mode='Markdown')
-    finally:
-        if filename and os.path.exists(filename):
-            os.remove(filename)
+    except Exception as err:
+        logger.error(f"Media extraction runtime crash: {str(err)}")
+        await msg.edit_text(f"❌ Processing Error:\n`{str(err)}`", parse_mode='Markdown')
 
 if __name__ == '__main__':
-    logger.info("🤖 Starting Telegram Downloader Bot Application...")
+    logger.info("🤖 Starting Dedicated YouTube Endpoint Downloader Bot Application...")
     try:
         application = ApplicationBuilder().token(BOT_TOKEN).build()
         application.add_handler(CommandHandler("start", start))
         application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
         application.run_polling()
     except Exception as initialization_error:
-        logger.critical(f"❌ Core engine crash during authorization setup: {str(initialization_error)}")
+        logger.critical(f"❌ Core engine setup crash: {str(initialization_error)}")
         sys.exit(1)
