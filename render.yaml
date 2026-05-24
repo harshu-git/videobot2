@@ -1,0 +1,8 @@
+services:
+  - type: worker
+    name: telegram-yt-bot
+    env: python
+    buildCommand: |
+      pip install -r requirements.txt
+      apt-get update && apt-get install -y ffmpeg
+    startCommand: python bot.py
