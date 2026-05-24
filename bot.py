@@ -9,26 +9,46 @@ ContextTypes,
 filters,
 )
 
-BOT_TOKEN = "PASTE_YOUR_BOT_TOKEN_HERE"
+# ─────────────────────────────────────────────
+
+# BOT TOKEN
 
 # ─────────────────────────────────────────────
 
-WELCOME_MESSAGE = """
-👋 Welcome to Harsh's Downloader Bot 🚀
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-📥 Send any YouTube link
-🎬 I'll download the video instantly
+# ─────────────────────────────────────────────
 
-⚡ Fast • Simple • HD Quality
+# START MESSAGE
 
-👨‍💻 Created by Harsh Shrimalii
-📷 instagram.com/framesbyharshhh
-"""
+# ─────────────────────────────────────────────
+
+WELCOME_MESSAGE = (
+"👋 Welcome to Harsh's Downloader Bot 🚀\n\n"
+"📥 Send any YouTube link\n"
+"🎬 I'll download the video instantly\n\n"
+"⚡ Fast • Simple • HD Quality\n\n"
+"👨‍💻 Created by Harsh Shrimalii\n"
+"📷 https://instagram.com/framesbyharshhh"
+)
+
+# ─────────────────────────────────────────────
+
+# START COMMAND
 
 # ─────────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-await update.message.reply_text(WELCOME_MESSAGE)
+
+```
+await update.message.reply_text(
+    WELCOME_MESSAGE
+)
+```
+
+# ─────────────────────────────────────────────
+
+# DOWNLOAD FUNCTION
 
 # ─────────────────────────────────────────────
 
@@ -50,10 +70,12 @@ with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 
     info = ydl.extract_info(url, download=True)
 
-    filename = ydl.prepare_filename(info)
-
-    return filename
+    return ydl.prepare_filename(info)
 ```
+
+# ─────────────────────────────────────────────
+
+# HANDLE USER MESSAGE
 
 # ─────────────────────────────────────────────
 
@@ -71,7 +93,7 @@ if "youtube.com" not in url and "youtu.be" not in url:
     return
 
 msg = await update.message.reply_text(
-    "⏳ Downloading..."
+    "⏳ Downloading video..."
 )
 
 try:
@@ -91,7 +113,7 @@ try:
     if size_mb > 49:
 
         await msg.edit_text(
-            f"⚠️ Video size is {size_mb:.1f}MB\nTelegram limit exceeded"
+            "⚠️ File too large for Telegram"
         )
 
         os.remove(file_path)
@@ -123,6 +145,10 @@ except Exception as e:
 
 # ─────────────────────────────────────────────
 
+# MAIN FUNCTION
+
+# ─────────────────────────────────────────────
+
 def main():
 
 ```
@@ -143,6 +169,10 @@ print("🤖 Bot is running...")
 
 app.run_polling()
 ```
+
+# ─────────────────────────────────────────────
+
+# RUN BOT
 
 # ─────────────────────────────────────────────
 
