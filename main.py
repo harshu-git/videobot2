@@ -22,11 +22,10 @@ if not BOT_TOKEN:
 BOT_TOKEN = BOT_TOKEN.strip().replace('"', '').replace("'", "")
 COOKIE_FILE_PATH = "temp_youtube_cookies.txt"
 
-# General configuration options
+# General configuration options - Fixed format handling for YouTube Shorts/Videos
 YTDL_OPTIONS = {
-    'format': 'bestvideo+bestaudio/best',
+    'format': 'best',
     'outtmpl': '%(id)s.%(ext)s',
-    'merge_output_format': 'mp4',
     'noplaylist': True,
     'quiet': True
 }
