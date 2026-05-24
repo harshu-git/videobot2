@@ -1,65 +1,84 @@
 import os
 import yt_dlp
+
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     MessageHandler,
-    filters,
     ContextTypes,
+    filters,
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 
-# Start command
+# START COMMAND
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Send me a YouTube video link and I will download it."
+        "🎬 Send me a YouTube link and I will download it."
     )
 
 
-# Download function
+# DOWNLOAD FUNCTION
 async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
 
-    msg = await update.message.reply_text("📥 Downloading video...")
+    status_message = await update.message.reply_text(
+        "📥 Downloading video..."
+    )
 
     try:
         ydl_opts = {
-            "format": "best[ext=mp4]",
-            "outtmpl": "video.%(ext)s",
+            "format": "best[ext=mp4]/best",
+            "outtmpl": "downloads/%(title)s.%(ext)s",
+            "cookiefile": "cookies.txt",
             "quiet": True,
+            "noplaylist": True,
         }
+
+        # Create downloads folder
+        if not os.path.exists("downloads"):
+            os.makedirs("downloads")
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            file_name = ydl.prepare_filename(info)
+            file_path = ydl.prepare_filename(info)
 
-        await msg.edit_text("📤 Uploading video...")
+        await status_message.edit_text("📤 Uploading video...")
 
-        with open(file_name, "rb") as video:
-            await update.message.reply_video(video=video)
+        # Telegram upload
+        with open(file_path, "rb") as video:
+            await update.message.reply_video(
+                video=video,
+                supports_streaming=True
+            )
 
-        os.remove(file_name)
+        # Delete downloaded file after upload
+        os.remove(file_path)
 
-        await msg.edit_text("✅ Done!")
+        await status_message.edit_text("✅ Done!")
 
     except Exception as e:
-        await msg.edit_text(f"❌ Error:\n{str(e)}")
+        await status_message.edit_text(
+            f"❌ Error:\n{str(e)}"
+        )
 
 
-# Main
+# MAIN
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
 
     app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, download_video)
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            download_video
+        )
     )
 
-    print("Bot is running...")
+    print("Bot running...")
     app.run_polling()
 
 
